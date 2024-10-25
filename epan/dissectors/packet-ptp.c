@@ -42,6 +42,8 @@
  *   - Improvements/corrections for cumulativeScaledRateOffset
  * - Prashant Tripathi 31-07-2024 <prashant_tripathi@selinc.com>
  *   - Corrections to timeOfNextJump field in ATOI TLV
+ * - Martin Ostertag & Aurel Hess 01-09-2024 <martin.ostertag@zhaw.ch> & <hesu@zhaw.ch>
+ *   - Added support for drift_tracking TLV (802.1ASdm)
 
  * Wireshark - Network traffic analyzer
  * By Gerald Combs <gerald@wireshark.org>
@@ -789,6 +791,21 @@ static int ett_ptp_time2;
 #define PTP_V2_FU_PRECISEORIGINTIMESTAMP_OFFSET                     34
 #define PTP_V2_FU_PRECISEORIGINTIMESTAMPSECONDS_OFFSET              34
 #define PTP_V2_FU_PRECISEORIGINTIMESTAMPNANOSECONDS_OFFSET          40
+
+/* 802.1AS Drift Tracking TLV (optionally attached after the Follow_Up information TLV) */
+#define PTP_AS_DT_TLV_INFORMATION_OFFSET                            76
+
+/* 802.1AS Drift Tracking TLV field offsets */
+#define PTP_AS_DT_TLV_TYPE_OFFSET                                    0
+#define PTP_AS_DT_TLV_LENGTHFIELD_OFFSET                             2
+#define PTP_AS_DT_TLV_ORGANIZATIONID_OFFSET                          4
+#define PTP_AS_DT_TLV_ORGANIZATIONSUBTYPE_OFFSET                     7
+#define PTP_AS_DT_TLV_SYNCEGRESSTIMESTAMPSECONDS_OFFSET             10
+#define PTP_AS_DT_TLV_SYNCEGRESSTIMESTAMPNANOSECONDS_OFFSET         16
+#define PTP_AS_DT_TLV_SYNCEGRESSTIMESTAMPFRACTIONALNANOSECONDS_OFFSET   20
+#define PTP_AS_DT_TLV_SYNCGRANDMASTERIDENTITY_OFFSET                22
+#define PTP_AS_DT_TLV_SYNCSTEPSREMOVED_OFFSET                       30
+#define PTP_AS_DT_TLV_RATERATIODRIFT_OFFSET                         32
 
 /* 802.1AS Follow_Up information TLV */
 #define PTP_AS_FU_TLV_INFORMATION_OFFSET                            44
@@ -1647,6 +1664,18 @@ static int hf_ptp_as_fu_tlv_cumulative_rate_ratio; /* Remove scale and offset fr
 static int hf_ptp_as_fu_tlv_gm_base_indicator;
 static int hf_ptp_as_fu_tlv_last_gm_phase_change;
 static int hf_ptp_as_fu_tlv_scaled_last_gm_freq_change;
+
+/* Fields for the Drift_Tracking TLV */
+static int hf_ptp_as_dt_tlv_tlvtype;
+static int hf_ptp_as_dt_tlv_lengthfield;
+static int hf_ptp_as_dt_tlv_organization_id;
+static int hf_ptp_as_dt_tlv_organization_subtype;
+static int hf_ptp_as_dt_tlv_sync_egress_timestamp_seconds;
+static int hf_ptp_as_dt_tlv_sync_egress_timestamp_nanoseconds;
+static int hf_ptp_as_dt_tlv_sync_egress_timestamp_fractional_nanoseconds;
+static int hf_ptp_as_dt_tlv_sync_grandmaster_identity;
+static int hf_ptp_as_dt_tlv_sync_steps_removed;
+static int hf_ptp_as_dt_tlv_rate_ratio_drift;
 
 /* Fields for PTP_DelayResponse (=dr) messages */
 /* static int hf_ptp_v2_dr_receivetimestamp; */ /* Field for seconds & nanoseconds */
@@ -2935,6 +2964,47 @@ dissect_ptp_v2_timetstamp(tvbuff_t *tvb, uint16_t *cur_offset, proto_tree *tree,
 /* Code to actually dissect the PTPv2 packets */
 
 static void
+dissect_drift_tracking_tlv(tvbuff_t *tvb, proto_tree *ptp_tree) /* 802.1ASdm */
+{
+    /* There are TLV's to be processed */
+    uint16_t tlv_length = tvb_get_ntohs(tvb, PTP_AS_DT_TLV_INFORMATION_OFFSET + PTP_AS_DT_TLV_LENGTHFIELD_OFFSET);
+
+    proto_tree *ptp_tlv_tree = proto_tree_add_subtree(ptp_tree, tvb, PTP_AS_DT_TLV_INFORMATION_OFFSET,
+                                                      tlv_length + PTP_AS_DT_TLV_ORGANIZATIONID_OFFSET,
+                                                      ett_ptp_v2_tlv, NULL, "Drift Tracking TLV");
+
+    proto_tree_add_item(ptp_tlv_tree, hf_ptp_as_dt_tlv_tlvtype, tvb, 
+                        PTP_AS_DT_TLV_INFORMATION_OFFSET + PTP_AS_DT_TLV_TYPE_OFFSET, 2, ENC_BIG_ENDIAN);
+
+    proto_tree_add_item(ptp_tlv_tree, hf_ptp_as_dt_tlv_lengthfield, tvb,
+                        PTP_AS_DT_TLV_INFORMATION_OFFSET + PTP_AS_DT_TLV_LENGTHFIELD_OFFSET, 2, ENC_BIG_ENDIAN);
+
+    proto_tree_add_item(ptp_tlv_tree, hf_ptp_as_dt_tlv_organization_id, tvb,
+                        PTP_AS_DT_TLV_INFORMATION_OFFSET + PTP_AS_DT_TLV_ORGANIZATIONID_OFFSET, 3, ENC_BIG_ENDIAN);
+
+    proto_tree_add_item(ptp_tlv_tree, hf_ptp_as_dt_tlv_organization_subtype, tvb,
+                        PTP_AS_DT_TLV_INFORMATION_OFFSET + PTP_AS_DT_TLV_ORGANIZATIONSUBTYPE_OFFSET, 3, ENC_BIG_ENDIAN);
+
+    proto_tree_add_item(ptp_tlv_tree, hf_ptp_as_dt_tlv_sync_egress_timestamp_seconds, tvb,
+                        PTP_AS_DT_TLV_INFORMATION_OFFSET + PTP_AS_DT_TLV_SYNCEGRESSTIMESTAMPSECONDS_OFFSET, 6, ENC_BIG_ENDIAN);
+
+    proto_tree_add_item(ptp_tlv_tree, hf_ptp_as_dt_tlv_sync_egress_timestamp_nanoseconds, tvb,
+                        PTP_AS_DT_TLV_INFORMATION_OFFSET + PTP_AS_DT_TLV_SYNCEGRESSTIMESTAMPNANOSECONDS_OFFSET, 4, ENC_BIG_ENDIAN);
+
+    proto_tree_add_item(ptp_tlv_tree, hf_ptp_as_dt_tlv_sync_egress_timestamp_fractional_nanoseconds, tvb,
+                        PTP_AS_DT_TLV_INFORMATION_OFFSET + PTP_AS_DT_TLV_SYNCEGRESSTIMESTAMPFRACTIONALNANOSECONDS_OFFSET, 2, ENC_BIG_ENDIAN);
+
+    proto_tree_add_item(ptp_tlv_tree, hf_ptp_as_dt_tlv_sync_grandmaster_identity, tvb,
+                        PTP_AS_DT_TLV_INFORMATION_OFFSET + PTP_AS_DT_TLV_SYNCGRANDMASTERIDENTITY_OFFSET, 8, ENC_BIG_ENDIAN);
+
+    proto_tree_add_item(ptp_tlv_tree, hf_ptp_as_dt_tlv_sync_steps_removed, tvb,
+                        PTP_AS_DT_TLV_INFORMATION_OFFSET + PTP_AS_DT_TLV_SYNCSTEPSREMOVED_OFFSET, 2, ENC_BIG_ENDIAN);
+
+    proto_tree_add_item(ptp_tlv_tree, hf_ptp_as_dt_tlv_rate_ratio_drift, tvb,
+                        PTP_AS_DT_TLV_INFORMATION_OFFSET + PTP_AS_DT_TLV_RATERATIODRIFT_OFFSET, 4, ENC_BIG_ENDIAN);
+}
+
+static void
 dissect_follow_up_tlv(tvbuff_t *tvb, proto_tree *ptp_tree)
 {
     proto_item  *ti = NULL;
@@ -2975,6 +3045,7 @@ dissect_follow_up_tlv(tvbuff_t *tvb, proto_tree *ptp_tree)
     proto_tree_add_item(ptp_tlv_tree, hf_ptp_as_fu_tlv_scaled_last_gm_freq_change, tvb,
                         PTP_AS_FU_TLV_INFORMATION_OFFSET + PTP_AS_FU_TLV_SCALEDLASTGMFREQCHANGE_OFFSET, 4, ENC_BIG_ENDIAN);
 }
+
 
 static void
 dissect_ptp_v2(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, bool ptpv2_oE)
@@ -3866,6 +3937,10 @@ dissect_ptp_v2(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, bool ptpv2_o
                 /* In 802.1AS there is a Follow_UP information TLV in the Follow Up Message */
                 if(is_802_1as){
                     dissect_follow_up_tlv(tvb, ptp_tree);
+                                        /* IEEE 802.1ASdm 11.4.4.4 */
+                    if (msg_len >= 112) {
+                        dissect_drift_tracking_tlv(tvb, ptp_tree);
+                    }
                 }
 
                 if (ptp_analyze_messages) {
@@ -6731,6 +6806,57 @@ proto_register_ptp(void)
         { &hf_ptp_v2_fu_preciseorigintimestamp_32bit,
           { "preciseOriginTimestamp (32bit)",           "ptp.v2.fu.preciseorigintimestamp.32bit",
             FT_BYTES, BASE_NONE, NULL, 0x00,
+            NULL, HFILL }
+        },
+        /* Fields for Drift_Tracking TLVs (802.1ASdm)*/
+        { &hf_ptp_as_dt_tlv_tlvtype,
+          { "tlvType", "ptp.as.dt.tlvType",
+            FT_UINT16, BASE_HEX | BASE_EXT_STRING, &ptp_v2_TLV_type_vals_ext, 0x00,
+            NULL, HFILL }
+        },
+        { &hf_ptp_as_dt_tlv_lengthfield,
+          { "lengthField", "ptp.as.dt.lengthField",
+            FT_UINT16, BASE_DEC, NULL, 0x00,
+            NULL, HFILL }
+        },
+        { &hf_ptp_as_dt_tlv_organization_id,
+          { "organizationId", "ptp.as.dt.organizationId",
+            FT_UINT24, BASE_DEC, NULL, 0x00,
+            NULL, HFILL }
+        },
+        { &hf_ptp_as_dt_tlv_organization_subtype,
+          { "OrganizationSubType", "ptp.as.dt.organizationSubType",
+            FT_INT24, BASE_DEC, NULL, 0x00,
+            NULL, HFILL }
+        },
+        { &hf_ptp_as_dt_tlv_sync_egress_timestamp_seconds,
+          { "syncEgressTimestamp (seconds)", "ptp.as.dt.syncEgressTimestamp.seconds",
+            FT_UINT48, BASE_DEC, NULL, 0x00,
+            NULL, HFILL }
+        },
+        { &hf_ptp_as_dt_tlv_sync_egress_timestamp_nanoseconds,
+          { "syncEgressTimestamp (nanoseconds)", "ptp.as.dt.syncEgressTimestamp.scaledNanoseconds",
+            FT_UINT32, BASE_DEC, NULL, 0x00,
+            NULL, HFILL }
+        },
+        { &hf_ptp_as_dt_tlv_sync_egress_timestamp_fractional_nanoseconds,
+          { "syncEgressTimestamp (fractionalNanoseconds)", "ptp.as.dt.syncEgressTimestamp.scaledNanoseconds",
+            FT_UINT16, BASE_HEX, NULL, 0x00,
+            NULL, HFILL }
+        },
+        { &hf_ptp_as_dt_tlv_sync_grandmaster_identity,
+          { "syncGrandmasterIdentity", "ptp.as.dt.syncGrandmasterIdentity",
+            FT_UINT64, BASE_HEX, NULL, 0x00,
+            NULL, HFILL }
+        },
+        { &hf_ptp_as_dt_tlv_sync_steps_removed,
+          { "syncStepsRemoved", "ptp.as.dt.syncStepsRemoved",
+            FT_UINT16, BASE_DEC, NULL, 0x00,
+            NULL, HFILL }
+        },
+        { &hf_ptp_as_dt_tlv_rate_ratio_drift,
+          { "rateRatioDrift", "ptp.as.dt.rateRatioDrift",
+            FT_INT32, BASE_DEC, NULL, 0x00,
             NULL, HFILL }
         },
         /* Fields for PTP_Follow_up TLVs */
