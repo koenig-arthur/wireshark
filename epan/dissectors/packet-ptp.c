@@ -65,6 +65,7 @@
 #include <epan/proto_data.h>
 #include <epan/oui.h>
 #include <epan/addr_resolv.h>
+#include <epan/manuf.h>
 #include "packet-ptp.h"
 
 #define NS_PER_S 1000000000
@@ -1674,6 +1675,7 @@ static int hf_ptp_as_dt_tlv_sync_egress_timestamp_seconds;
 static int hf_ptp_as_dt_tlv_sync_egress_timestamp_nanoseconds;
 static int hf_ptp_as_dt_tlv_sync_egress_timestamp_fractional_nanoseconds;
 static int hf_ptp_as_dt_tlv_sync_grandmaster_identity;
+static int hf_ptp_as_dt_tlv_sync_grandmaster_manufacturer_name;
 static int hf_ptp_as_dt_tlv_sync_steps_removed;
 static int hf_ptp_as_dt_tlv_rate_ratio_drift;
 
@@ -2961,6 +2963,24 @@ dissect_ptp_v2_timetstamp(tvbuff_t *tvb, uint16_t *cur_offset, proto_tree *tree,
     *cur_offset = *cur_offset + 10;
 }
 
+
+// Function to add manufacturer information to the protocol tree
+static void 
+add_manufacturer_info(proto_tree *tree, int hfindex, tvbuff_t *tvb, int offset) {
+    uint8_t syncGrandmasterIdentity[6];
+    const char *manufacturer_name;
+    const char *long_name;
+
+    // Extract the syncGrandmasterIdentity from the tvb buffer
+    tvb_memcpy(tvb, syncGrandmasterIdentity, offset, 6);
+
+    // Call ws_manuf_lookup to get the manufacturer information
+    manufacturer_name = ws_manuf_lookup(syncGrandmasterIdentity, &long_name, NULL);
+
+    // Add the manufacturer name to the protocol tree
+    proto_tree_add_string(tree, hfindex, tvb, offset, 6, manufacturer_name);
+}
+
 /* Code to actually dissect the PTPv2 packets */
 
 static void
@@ -2996,6 +3016,10 @@ dissect_drift_tracking_tlv(tvbuff_t *tvb, proto_tree *ptp_tree) /* 802.1ASdm */
 
     proto_tree_add_item(ptp_tlv_tree, hf_ptp_as_dt_tlv_sync_grandmaster_identity, tvb,
                         PTP_AS_DT_TLV_INFORMATION_OFFSET + PTP_AS_DT_TLV_SYNCGRANDMASTERIDENTITY_OFFSET, 8, ENC_BIG_ENDIAN);
+    
+    // Add manufacturer information to the protocol tree
+    add_manufacturer_info(ptp_tlv_tree, hf_ptp_as_dt_tlv_sync_grandmaster_manufacturer_name, tvb,
+                        PTP_AS_DT_TLV_INFORMATION_OFFSET + PTP_AS_DT_TLV_SYNCGRANDMASTERIDENTITY_OFFSET);
 
     proto_tree_add_item(ptp_tlv_tree, hf_ptp_as_dt_tlv_sync_steps_removed, tvb,
                         PTP_AS_DT_TLV_INFORMATION_OFFSET + PTP_AS_DT_TLV_SYNCSTEPSREMOVED_OFFSET, 2, ENC_BIG_ENDIAN);
@@ -6847,6 +6871,11 @@ proto_register_ptp(void)
         { &hf_ptp_as_dt_tlv_sync_grandmaster_identity,
           { "syncGrandmasterIdentity", "ptp.as.dt.syncGrandmasterIdentity",
             FT_UINT64, BASE_HEX, NULL, 0x00,
+            NULL, HFILL }
+        },
+        { &hf_ptp_as_dt_tlv_sync_grandmaster_manufacturer_name,
+          { "syncGrandmasterIdentity (Manufacturer Name)", "ptp.as.dt.manufacturer_name",
+            FT_STRING, BASE_NONE, NULL, 0x00,
             NULL, HFILL }
         },
         { &hf_ptp_as_dt_tlv_sync_steps_removed,
