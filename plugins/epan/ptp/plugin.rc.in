@@ -1,0 +1,30 @@
+#include <winres.h>
+
+1 VERSIONINFO
+FILEVERSION @WIRESHARK_VERSION_MAJOR@,@WIRESHARK_VERSION_MINOR@,@WIRESHARK_VERSION_MICRO@,0
+PRODUCTVERSION @WIRESHARK_VERSION_MAJOR@,@WIRESHARK_VERSION_MINOR@,@WIRESHARK_VERSION_MICRO@,0
+FILEFLAGSMASK 0x3fL
+#ifdef _DEBUG
+FILEFLAGS 0x1L
+#else
+FILEFLAGS 0x0L
+#endif
+FILEOS 0x4L
+FILETYPE 0x2L
+FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "FileDescription", "PTP Dissector Plugin\0"
+            VALUE "FileVersion", "@WIRESHARK_VERSION@\0"
+            VALUE "ProductName", "Wireshark\0"
+            VALUE "ProductVersion", "@WIRESHARK_VERSION@\0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END
