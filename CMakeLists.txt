@@ -37,6 +37,16 @@ endif()
 
 project(${_project_name} C CXX)
 
+if (UNIX)
+    message(STATUS "Configuring for Unix/Linux")
+    # Add any Unix/Linux specific configurations here
+elseif (WIN32)
+    message(STATUS "Configuring for Windows")
+    # Add any Windows specific configurations here
+else()
+	message(STATUS "Platform not Windows or Unix/Linux")
+endif()
+
 if(WIN32)
 	set(_msystem False)
 	set(_repository False)
