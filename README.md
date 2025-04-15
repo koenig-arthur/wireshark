@@ -1,3 +1,120 @@
+# Building Wireshark
+Requirements:
+- Ubuntu 22 or newer and 10GB of RAM for Ubuntu installation.
+- Ubuntu with distrobox (target Windows) it is recommended to use Ubuntu 24 and have at least 20GB of RAM.
+- If you are using Windows as the host system with Fedora WSL, you will need at least 32GB of RAM.
+
+Building for Windows is best done under Fedora, as it is much easier and less painful. Just as a hint, under Windows there is also a Fedora WSL, so you can compile without having to manually install many of the things required for native Windows building for Windows (Follow the Fedora instructions and cut the distrobox part).
+
+## On Ubuntu for Ubuntu
+Source [wireshark documentation](https://www.wireshark.org/docs/wsdg_html_chunked/ChapterSetup.html). 
+1. Clone repo:
+```
+git clone https://github.com/koenig-arthur/wireshark.git
+cd wireshark
+```
+2. Set up
+```
+sudo tools/debian-setup.sh --install-all
+```
+3. Build
+```
+mkdir build && cd build
+cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=TRUE -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ --no-warn-unused-cli -S .. -B . -G Ninja
+cmake --build . --config Debug --target all
+```
+After switching compiles or changing settings, it is recommended to clear the build directory.
+
+## On Ubuntu for Windows (via distrobox with fedora)
+Source [wireshark documentation](https://www.wireshark.org/docs/wsdg_html_chunked/ChSetupWindows.html)
+1. Create distrobox, yes you can use curl (see [documentation](https://distrobox.it/#installation
+ ):)
+```
+curl -s https://raw.githubusercontent.com/89luca89/distrobox/main/install | sudo sh
+```
+Create a fedora-box with fedora 39.
+```
+distrobox-create --root --name fedora-box --image fedora:39
+```
+If you screw up, you can delete the container with
+```
+distrobox-rm --root -f fedora-box
+```
+2.Start/enter fedora-box:
+```
+distrobox enter --root fedora-box
+```
+You can exit with:
+```
+exit
+```
+If necessary, install git:
+```
+sudo dnf install git
+```
+3. Go into fedora, then clone repo, then cd into repo:
+```
+git clone https://github.com/koenig-arthur/wireshark.git
+cd wireshark
+```
+4. Install the required dependencies:
+```
+sudo tools/mingw-rpm-setup.sh --install-all
+```
+5. Build
+```
+mkdir build && cd build
+mingw64-cmake -G Ninja -DENABLE_CCACHE=Yes -DFETCH_lua=Yes ..
+ninja
+```
+After switching compiles or changing settings, it is recommended to clear the build directory.
+
+6. Build .exe for win
+```
+ninja wireshark_nsis_prep
+ninja wireshark_nsis
+```
+7. Collect your.exe
+In wireshark/packaging/nsis are the win .exe files and can be installed as usual.
+If they are not there look for them in wireshark/build/packaging/nsis
+
+
+# Using Wireshark
+
+## On Ubuntu for Ubuntu
+
+### Run the build from the build directory:
+```
+sudo build/run/wireshark
+```
+### Install the build:
+```
+cd build
+sudo ninja install
+```
+or if you use make
+```
+cd build
+sudo make install
+```
+For non-sudo users to access the interface:
+```
+sudo dpkg-reconfigure wireshark-common
+```
+Add you to the allowd users to configure Wireshark without sudo:
+```
+sudo usermod -a -G wireshark {your user name}
+```
+and logging out and back in.
+If you still have problems, make sure that dumpcap has the required CAP_NET_RAW and CAP_NET_ADMIN capabilities.
+Find the path to it and set it accordingly.
+```
+which dumpcap
+sudo setcap cap_net_raw,cap_net_admin=ep /path/to/dumpcap
+```
+
+
+
 General Information
 -------------------
 
